@@ -15,6 +15,8 @@ User = get_user_model()
 class TestCommentCreation(TestCase):
     NOTE_TITLE = 'Заголовок заметки'
     NOTE_TEXT = 'Текст заметки'
+    WARNING = ' - такой slug уже существует, придумайте уникальное значение!'
+    SLUG_FOR_SLUGIFY = "СЛАГ"
 
     @classmethod
     def setUpTestData(cls):
@@ -49,10 +51,10 @@ class TestCommentCreation(TestCase):
 
     def test_user_can_create_comment(self):
         # Совершаем запрос через авторизованный клиент.
-        response = self.auth_client.post(self.url, data=self.form_data)
+        self.auth_client.post(self.url, data=self.form_data)
         # Проверяем, что редирект привёл к разделу с комментами.
         # self.assertRedirects(response, self.url)
-        # Считаем количество комментариев.
+        # Считаем количество записей.
         notes_count = Note.objects.count()
         # Убеждаемся, что есть один комментарий.
         self.assertEqual(notes_count, 1)
@@ -62,3 +64,31 @@ class TestCommentCreation(TestCase):
         self.assertEqual(note.title, self.NOTE_TITLE)
         self.assertEqual(note.text, self.NOTE_TEXT)
         self.assertEqual(note.author, self.author)
+
+    def test_unique_slug(self):
+        # Совершаем запрос через авторизованный клиент.
+        self.auth_client.post(self.url, data=self.form_data)
+        # Считаем количество записей.
+        notes_count = Note.objects.count()
+        self.assertEqual(notes_count, 1)
+        # Повторяем запрос с теми же значениями полей формы
+        response = self.auth_client.post(self.url, data=self.form_data)
+        # Проверяем, есть ли в ответе ошибка формы.
+        self.assertFormError(
+            response,
+            form='form',
+            field='text',
+            errors=f"{self.form_data['slug']}WARNING"
+        )
+        # Дополнительно убедимся, что комментарий не был создан.
+        comments_count = Note.objects.count()
+        self.assertEqual(comments_count, 1)
+
+    def test_slugify(self):
+        self.notes = Note.objects.create(
+            title=self.NOTE_TITLE,
+            text=self.NOTE_TEXT,
+            author=self.author
+        )
+        note = Note.objects.get()
+        self.assertEqual(note.slug, slugify(self.NOTE_TITLE))
